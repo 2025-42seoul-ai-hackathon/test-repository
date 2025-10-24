@@ -16,3 +16,12 @@ ujson>=5.10.0
 PyYAML>=6
 tqdm>=4.64
 prettytable>=3.0
+
+# Flask 백엔드 의존성
+Flask==3.0.0
+flask-cors==4.0.0
+Werkzeug==3.0.1
+
+# API 요청
+requests==2.31.0
+python-dotenv==1.0.0

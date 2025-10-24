@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 테스트 - 알약 도우미</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2C3E50;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            margin-bottom: 40px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        h2 {
+            color: #4A90E2;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .upload-area {
+            border: 2px dashed #4A90E2;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .upload-area:hover {
+            background: #E3F2FD;
+        }
+
+        .upload-area.dragover {
+            border-color: #66BB6A;
+            background: #E8F5E9;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        button {
+            background: linear-gradient(135deg, #4A90E2, #66BB6A);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #4A90E2;
+        }
+
+        .result h3 {
+            color: #2C3E50;
+            margin-bottom: 10px;
+        }
+
+        .result pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            color: #2C3E50;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4A90E2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status {
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .status.success {
+            background: #E8F5E9;
+            color: #66BB6A;
+        }
+
+        .status.error {
+            background: #FFEBEE;
+            color: #F44336;
+        }
+
+        .preview-image {
+            max-width: 300px;
+            max-height: 300px;
+            margin-top: 15px;
+            border-radius: 8px;
+        }
+
+        .text-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .text-list li {
+            padding: 8px;
+            background: #f8f9fa;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+
+        .score {
+            color: #4A90E2;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 API 테스트 - 알약 도우미</h1>
+
+        <!-- Test 1: Health Check -->
+        <div class="test-section">
+            <h2>1. 서버 상태 체크</h2>
+            <button onclick="testHealth()">서버 상태 확인</button>
+            <div id="health-result"></div>
+        </div>
+
+        <!-- Test 2: OCR -->
+        <div class="test-section">
+            <h2>2. OCR 테스트 (약 봉투 이미지 인식)</h2>
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                <p>📸 클릭하거나 이미지를 드래그하여 업로드</p>
+                <p style="font-size: 12px; color: #7F8C8D; margin-top: 10px;">
+                    지원 형식: JPG, PNG, GIF (최대 16MB)
+                </p>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
+            <img id="preview" class="preview-image" style="display:none;">
+            <button id="ocrButton" onclick="testOCR()" disabled>OCR 실행</button>
+            <div id="ocr-result"></div>
+        </div>
+
+        <!-- Test 3: Parse Prescription -->
+        <div class="test-section">
+            <h2>3. 처방전 파싱 테스트</h2>
+            <p style="margin-bottom: 10px;">OCR 결과를 자동으로 분석하여 약품 정보와 알림을 생성합니다.</p>
+            <button id="parseButton" onclick="testParse()" disabled>처방전 분석</button>
+            <div id="parse-result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000';
+        let selectedFile = null;
+        let ocrTexts = [];
+
+        // Drag and Drop 처리
+        const uploadArea = document.getElementById('uploadArea');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                selectedFile = files[0];
+                previewImage(selectedFile);
+            }
+        });
+
+        // 파일 선택 처리
+        function handleFileSelect(event) {
+            selectedFile = event.target.files[0];
+            previewImage(selectedFile);
+        }
+
+        // 이미지 미리보기
+        function previewImage(file) {
+            const preview = document.getElementById('preview');
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                document.getElementById('ocrButton').disabled = false;
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // Test 1: Health Check
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '<div class="loading"></div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status success">✓ 성공</div>
+                        <h3>응답:</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status error">✗ 실패</div>
+                        <h3>에러:</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        // Test 2: OCR
+        async function testOCR() {
+            if (!selectedFile) {
+                alert('이미지를 먼저 선택해주세요!');
+                return;
+            }
+
+            const resultDiv = document.getElementById('ocr-result');
+            const button = document.getElementById('ocrButton');
+            
+            button.disabled = true;
+            resultDiv.innerHTML = '<div class="loading"></div> OCR 처리 중...';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const response = await fetch(`${API_BASE}/api/ocr`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    ocrTexts = data.data.texts;
+                    
+                    const textsList = data.data.texts.map((text, i) => 
+                        `<li>${text} <span class="score">[${(data.data.scores[i] * 100).toFixed(1)}%]</span></li>`
+                    ).join('');
+
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <div class="status success">✓ 성공</div>
+                            <h3>인식된 텍스트 (${data.data.counts.lines}개):</h3>
+                            <ul class="text-list">${textsList}</ul>
+                        </div>
+                    `;
+
+                    document.getElementById('parseButton').disabled = false;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <div class="status error">✗ 실패</div>
+                            <h3>에러:</h3>
+                            <pre>${data.message}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status error">✗ 실패</div>
+                        <h3>에러:</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        // Test 3: Parse Prescription
+        async function testParse() {
+            if (ocrTexts.length === 0) {
+                alert('먼저 OCR을 실행해주세요!');
+                return;
+            }
+
+            const resultDiv = document.getElementById('parse-result');
+            const button = document.getElementById('parseButton');
+            
+            button.disabled = true;
+            resultDiv.innerHTML = '<div class="loading"></div> 처방전 분석 중...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/medicine/parse`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ texts: ocrTexts })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    const medicinesHtml = data.data.medicines.map(med => `
+                        <div style="margin: 15px 0; padding: 15px; background: white; border-radius: 8px;">
+                            <h4 style="color: #2C3E50; margin-bottom: 10px;">💊 ${med.name}</h4>
+                            <p><strong>복용:</strong> ${med.dosage}</p>
+                            <p><strong>시점:</strong> ${med.timing}</p>
+                            <p><strong>기간:</strong> ${med.duration}</p>
+                        </div>
+                    `).join('');
+
+                    const alarmsHtml = data.data.alarms.map(alarm => `
+                        <li>🔔 ${alarm.time} - ${alarm.condition} (${alarm.medicine})</li>
+                    `).join('');
+
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <div class="status success">✓ 성공</div>
+                            
+                            <h3>인식된 약품 정보:</h3>
+                            ${medicinesHtml}
+                            
+                            <h3 style="margin-top: 20px;">생성된 알림:</h3>
+                            <ul class="text-list">${alarmsHtml}</ul>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result">
+                            <div class="status error">✗ 실패</div>
+                            <h3>에러:</h3>
+                            <pre>${data.message}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <div class="status error">✗ 실패</div>
+                        <h3>에러:</h3>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            } finally {
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
