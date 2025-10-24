@@ -1,0 +1,431 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  background: #F8F9FA;
+  color: #2C3E50;
+  overflow: hidden;
+}
+
+.app {
+  width: 100%;
+  max-width: 480px;
+  height: 100vh;
+  margin: 0 auto;
+  background: white;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 헤더 */
+.header {
+  padding: 20px 20px 16px;
+  background: white;
+  border-bottom: 1px solid #E9ECEF;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, #4A90E2, #66BB6A);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.app-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2C3E50;
+}
+
+.settings-icon {
+  width: 24px;
+  height: 24px;
+  color: #7F8C8D;
+  cursor: pointer;
+  font-size: 24px;
+}
+
+/* 메인 컨텐츠 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 24px;
+  overflow-y: auto;
+}
+
+/* 카메라 일러스트 */
+.camera-illustration {
+  width: 180px;
+  height: 180px;
+  background: linear-gradient(135deg, #E3F2FD 0%, #E8F5E9 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+  position: relative;
+}
+
+.camera-icon {
+  font-size: 80px;
+}
+
+.pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #4A90E2;
+  animation: pulse 2s infinite;
+  opacity: 0;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+.main-text {
+  font-size: 22px;
+  font-weight: 600;
+  color: #2C3E50;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.sub-text {
+  font-size: 15px;
+  color: #7F8C8D;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 버튼 */
+.capture-button,
+.confirm-button,
+.save-button {
+  width: 85%;
+  height: 56px;
+  background: linear-gradient(135deg, #4A90E2, #66BB6A);
+  border: none;
+  border-radius: 16px;
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(74, 144, 226, 0.3);
+  margin-top: 40px;
+  transition: transform 0.2s;
+}
+
+.capture-button:active,
+.confirm-button:active,
+.save-button:active {
+  transform: scale(0.98);
+}
+
+.capture-button:disabled,
+.confirm-button:disabled,
+.save-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 하단 네비게이션 */
+.bottom-nav {
+  display: flex;
+  background: white;
+  border-top: 1px solid #E9ECEF;
+  padding: 12px 0;
+}
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 8px 0;
+  color: #7F8C8D;
+  transition: color 0.2s;
+}
+
+.nav-item.active {
+  color: #4A90E2;
+}
+
+.nav-icon {
+  font-size: 24px;
+}
+
+.nav-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 로딩 화면 */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader {
+  width: 60px;
+  height: 60px;
+  border: 4px solid #E9ECEF;
+  border-top: 4px solid #4A90E2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 24px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 18px;
+  color: #2C3E50;
+  font-weight: 500;
+}
+
+/* 결과 화면 */
+.result-header {
+  padding: 20px;
+  background: white;
+  border-bottom: 1px solid #E9ECEF;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #2C3E50;
+  cursor: pointer;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2C3E50;
+}
+
+.result-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: #F8F9FA;
+}
+
+.medicine-card {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.medicine-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2C3E50;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #F1F3F5;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #7F8C8D;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #2C3E50;
+  font-weight: 500;
+}
+
+/* 알림 설정 화면 */
+.alarm-info {
+  background: #E8F5E9;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  border-left: 4px solid #66BB6A;
+}
+
+.alarm-info-text {
+  font-size: 14px;
+  color: #2C3E50;
+  line-height: 1.6;
+}
+
+.medicine-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2C3E50;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alarm-item {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.alarm-time-info {
+  flex: 1;
+}
+
+.alarm-time {
+  font-size: 20px;
+  font-weight: 600;
+  color: #2C3E50;
+  margin-bottom: 4px;
+}
+
+.alarm-condition {
+  font-size: 14px;
+  color: #7F8C8D;
+}
+
+.edit-button {
+  background: #F1F3F5;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: #4A90E2;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* 알림 목록 화면 */
+.medicine-list-item {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.medicine-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.medicine-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2C3E50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-active {
+  background: #E8F5E9;
+  color: #66BB6A;
+}
+
+.next-alarm {
+  font-size: 14px;
+  color: #4A90E2;
+  margin-bottom: 8px;
+}
+
+.progress-info {
+  font-size: 13px;
+  color: #7F8C8D;
+}
+
+/* 파일 입력 숨김 */
+input[type="file"] {
+  display: none;
+}
+
+/* 스크롤바 스타일 */
+.result-content::-webkit-scrollbar,
+.main-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.result-content::-webkit-scrollbar-track,
+.main-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.result-content::-webkit-scrollbar-thumb,
+.main-content::-webkit-scrollbar-thumb {
+  background: #4A90E2;
+  border-radius: 3px;
+}
