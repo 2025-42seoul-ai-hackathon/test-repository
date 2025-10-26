@@ -176,6 +176,10 @@ class MedicineAPIService:
             if not med['duration']:
                 med['duration'] = '7일'  # 기본값
         
+        print(">> Parsed medicine list:")
+        for med in medicines:
+            print(f" - {med['name']} | {med['dosage']} | {med['timing']} | {med['duration']}")
+
         return {
             'medicines': medicines
         }

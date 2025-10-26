@@ -89,6 +89,9 @@ class OCRService:
         texts, scores, boxes = self._normalize_result(res)
         
         print(f">> Extracted {len(texts)} text lines")
+        for i, (t, s) in enumerate(zip(texts, scores), 1):
+            print(f"   {i:02d}. [{s:.2f}] {t}")
+
         
         return {
             'texts': texts,
