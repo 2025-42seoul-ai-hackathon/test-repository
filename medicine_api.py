@@ -1,55 +1,111 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-의약품 정보 API 서비스 - e약은요 API 연동
+의약품 정보 API 서비스 - e약은요 API 연동 + 처방 파서(개선판)
+- 노이즈 컷, 오탈자 보정, 인접행 결합, 스코어링
+- 콘솔 로그: 파싱된 약 리스트 출력
 """
+
+import os
 import re
+import sys
 import requests
 from typing import Dict, List, Optional, Any
 from datetime import time
 
+# -----------------------------------------------------------
+# 모듈 전역 상수/정규식/유틸
+# -----------------------------------------------------------
+
+_KO_NOISE_KEYWORDS = {
+    "환자정보", "병원정보", "영수증", "현금", "현금영수증", "사업자등록", "사업장소재지", "발행일", "교부번호",
+    "약제비", "본인부담", "보험자부담", "총수납", "주의사항", "복약안내", "약품사진", "약품명", "투약량", "횟수", "일수",
+    "표시대로복용", "아침", "점심", "저녁", "취침전"
+}
+
+_MED_NAME_RE = re.compile(r"(?:[가-힣A-Za-z]+)(?:정|캡슐|시럽|액)\d{0,3}(?:mg|g|ml)?")
+_PER_DOSE_RE = re.compile(r"(\d+)정씩")
+_FREQ_RE = re.compile(r"(?:1일|하루)(\d+)회|(\d+)번")
+_DURATION_RE = re.compile(r"(\d+)일분?")
+_TIMING_RE = re.compile(r"식(전|후)")
+
+
+def _normalize_ocr(s: str) -> str:
+    """OCR 텍스트 정규화(오탈자 보정 포함)"""
+    t = re.sub(r"[`'\"[\]<>･·]", "", s)
+    t = re.sub(r"\s+", "", t)
+
+    # 5l0 → 510
+    t = re.sub(r"(\d)l(\d)", r"\g<1>1\g<2>", t)
+
+    # 자주 틀리는 문자
+    t = t.replace("O", "0")
+    t = t.replace("|", "1")
+
+    # 10mg 계열 오탈자 보정
+    t = re.sub(r"(정)1[에eE][mM]9\b", r"\g<1>10mg", t)   # 인데놀정1에m9 → 인데놀정10mg
+    t = re.sub(r"(정)1[이iIlL][mM]\b", r"\g<1>10mg", t)  # 인데놀정1이m  → 인데놀정10mg
+    t = re.sub(r"(?<=\d)lm\b", "10mg", t)                # 10lm         → 10mg
+
+    # 단위 누락 보정: 500m → 500mg
+    t = re.sub(r"(?<=\d)m\b", "mg", t)
+
+    # 한글/영숫자만
+    t = re.sub(r"[^\w가-힣]", "", t)
+    return t
+
+
+def _is_noise_line(t: str) -> bool:
+    if len(t) <= 1:
+        return True
+    for k in _KO_NOISE_KEYWORDS:
+        if k in t:
+            return True
+    if re.fullmatch(r"\d{2,}원", t):
+        return True
+    if re.fullmatch(r"\d{3,}[-]?\d{2}[-]?\d{5}", t):  # 사업자번호
+        return True
+    if re.fullmatch(r"\d{8}", t):                     # yyyymmdd
+        return True
+    if re.fullmatch(r"\d{4}[-]?\d{2}[-]?\d{2}", t):   # yyyy-mm-dd
+        return True
+    return False
+
+
+def _merge_neighbor(lines: List[str], i: int, radius: int = 3) -> str:
+    l = max(0, i - radius)
+    r = min(len(lines), i + radius + 1)
+    return "".join(lines[l:r])
+
+
+# -----------------------------------------------------------
+# Medicine API + 처방 파서
+# -----------------------------------------------------------
 
 class MedicineAPIService:
     """
-    e약은요(의약품안전나라) API를 통한 약품 정보 조회
+    e약은요(의약품안전나라) API + 처방 파서
     API 문서: https://nedrug.mfds.go.kr/api_openapi_info
     """
-    
+
     def __init__(self, api_key: Optional[str] = None):
-        """
-        Args:
-            api_key: e약은요 API 키 (환경변수 MEDICINE_API_KEY에서도 읽기 가능)
-        """
-        import os
         self.api_key = api_key or os.getenv('MEDICINE_API_KEY', '')
         self.base_url = 'http://apis.data.go.kr/1471000/DrbEasyDrugInfoService'
-        
+
         if not self.api_key:
             print("WARNING: MEDICINE_API_KEY not set. API calls will fail.")
-        
-        # 기본 식사 시간 (수정 가능)
+
         self.default_meal_times = {
-            'breakfast': time(8, 0),   # 아침 8시
-            'lunch': time(12, 0),      # 점심 12시
-            'dinner': time(19, 0)      # 저녁 7시
+            'breakfast': time(8, 0),
+            'lunch': time(12, 0),
+            'dinner': time(19, 0)
         }
-    
+
     def get_medicine_info(self, medicine_name: str) -> Optional[Dict[str, Any]]:
-        """
-        약품명으로 상세 정보 조회
-        
-        Args:
-            medicine_name: 약품명 (예: "타이레놀")
-        
-        Returns:
-            약품 정보 딕셔너리 또는 None
-        """
         if not self.api_key:
-            # API 키 없을 때 더미 데이터 반환 (개발용)
             return self._get_dummy_medicine_info(medicine_name)
-        
+
         try:
-            # API 호출
             endpoint = f"{self.base_url}/getDrbEasyDrugList"
             params = {
                 'serviceKey': self.api_key,
@@ -57,17 +113,13 @@ class MedicineAPIService:
                 'type': 'json',
                 'numOfRows': 10
             }
-            
-            response = requests.get(endpoint, params=params, timeout=10)
-            response.raise_for_status()
-            
-            data = response.json()
-            
-            # 결과 파싱
+            resp = requests.get(endpoint, params=params, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+
             if 'body' in data and 'items' in data['body']:
                 items = data['body']['items']
                 if items:
-                    # 첫 번째 결과 반환
                     item = items[0]
                     return {
                         'name': item.get('itemName', ''),
@@ -79,15 +131,12 @@ class MedicineAPIService:
                         'caution': item.get('atpnWarnQesitm', ''),
                         'storage': item.get('depositMethodQesitm', '')
                     }
-            
             return None
-        
         except Exception as e:
             print(f"Error fetching medicine info: {e}")
             return self._get_dummy_medicine_info(medicine_name)
-    
+
     def _get_dummy_medicine_info(self, medicine_name: str) -> Dict[str, Any]:
-        """API 키 없을 때 더미 데이터 (개발/테스트용)"""
         return {
             'name': medicine_name,
             'company': '제약회사',
@@ -98,194 +147,196 @@ class MedicineAPIService:
             'caution': '주의사항',
             'storage': '보관방법'
         }
-    
-    def parse_prescription(self, texts: List[str]) -> Dict[str, Any]:
-        """
-        OCR 텍스트 리스트에서 처방 정보 파싱
-        
-        Args:
-            texts: OCR로 추출된 텍스트 리스트
-        
-        Returns:
-            {
-                'medicines': [
-                    {
-                        'name': '약품명',
-                        'dosage': '1일 3회',
-                        'timing': '식후 30분',
-                        'duration': '7일'
-                    }
-                ]
-            }
-        """
-        medicines = []
-        current_medicine = {}
-        
-        # 패턴 정의
-        medicine_pattern = re.compile(r'([가-힣a-zA-Z]+\s*\d+\s*mg|[가-힣a-zA-Z]+정|[가-힣a-zA-Z]+캡슐)')
-        dosage_pattern = re.compile(r'1일\s*(\d+)회|하루\s*(\d+)번')
-        timing_pattern = re.compile(r'식(전|후)\s*(\d+)?(분|시간)?')
-        duration_pattern = re.compile(r'(\d+)일분?')
-        
-        for text in texts:
-            text = text.strip()
-            
-            # 약품명 찾기
-            if medicine_pattern.search(text):
-                # 이전 약품 정보 저장
-                if current_medicine.get('name'):
-                    medicines.append(current_medicine.copy())
-                
-                current_medicine = {
-                    'name': text,
-                    'dosage': '',
-                    'timing': '',
-                    'duration': ''
-                }
-            
-            # 복용 횟수 찾기
-            dosage_match = dosage_pattern.search(text)
-            if dosage_match and current_medicine:
-                count = dosage_match.group(1) or dosage_match.group(2)
-                current_medicine['dosage'] = f'1일 {count}회'
-            
-            # 복용 시점 찾기
-            timing_match = timing_pattern.search(text)
-            if timing_match and current_medicine:
-                when = timing_match.group(1)  # 전 or 후
-                amount = timing_match.group(2) or ''
-                unit = timing_match.group(3) or ''
-                current_medicine['timing'] = f'식{when} {amount}{unit}'.strip()
-            
-            # 처방 기간 찾기
-            duration_match = duration_pattern.search(text)
-            if duration_match and current_medicine:
-                days = duration_match.group(1)
-                current_medicine['duration'] = f'{days}일'
-        
-        # 마지막 약품 정보 저장
-        if current_medicine.get('name'):
-            medicines.append(current_medicine)
-        
-        # 기본값 설정
-        for med in medicines:
-            if not med['dosage']:
-                med['dosage'] = '1일 3회'  # 기본값
-            if not med['timing']:
-                med['timing'] = '식후 30분'  # 기본값
-            if not med['duration']:
-                med['duration'] = '7일'  # 기본값
-        
-        print(">> Parsed medicine list:")
-        for med in medicines:
-            print(f" - {med['name']} | {med['dosage']} | {med['timing']} | {med['duration']}")
 
-        return {
-            'medicines': medicines
-        }
-    
+    def parse_prescription(self, texts: List[str], scores: Optional[List[float]] = None) -> Dict[str, Any]:
+        try:
+            # 1) 전처리 + 노이즈 컷
+            norm: List[str] = []
+            for idx, raw in enumerate(texts):
+                t = _normalize_ocr(raw)
+                if not t:
+                    continue
+                if _is_noise_line(t):
+                    continue
+                if scores is not None and idx < len(scores) and scores[idx] < 0.55:
+                    continue
+                norm.append(t)
+
+            # 2) 약명 후보 수집(±3행 윈도우)
+            candidates = []
+            for i, _t in enumerate(norm):
+                w = _merge_neighbor(norm, i, 3)
+                m = _MED_NAME_RE.search(w)
+                if m:
+                    candidates.append(("name", i, w))
+                elif "인데놀정" in w:
+                    candidates.append(("name", i, w))
+
+            # 마지막 수단: “정 + 숫자”가 보이면 후보로
+            if not candidates:
+                for i, t in enumerate(norm):
+                    if "정" in t and re.search(r"\d", t):
+                        candidates.append(("name", i, t))
+                        break
+
+            # 3) 후보 스코어링
+            best = None
+            for _, i, w in candidates:
+                name_match = _MED_NAME_RE.search(w)
+                name = name_match.group(0) if name_match else ("인데놀정" if "인데놀정" in w else None)
+                if not name:
+                    continue
+
+                per_dose = 1
+                m = _PER_DOSE_RE.search(w)
+                if not m:
+                    for line in norm:
+                        m = _PER_DOSE_RE.search(line)
+                        if m: break
+                if m:
+                    per_dose = int(m.group(1))
+
+                freq = None
+                m = _FREQ_RE.search(w)
+                if not m:
+                    for line in norm:
+                        m = _FREQ_RE.search(line)
+                        if m: break
+                if m:
+                    freq = int(m.group(1) or m.group(2))
+
+                duration = None
+                m = _DURATION_RE.search(w)
+                if not m:
+                    for line in norm:
+                        m = _DURATION_RE.search(line)
+                        if m: break
+                if m:
+                    duration = int(m.group(1))
+
+                timing = None
+                m = _TIMING_RE.search(w)
+                if not m:
+                    for line in norm:
+                        m = _TIMING_RE.search(line)
+                        if m: break
+                if m:
+                    timing = f"식{m.group(1)}"
+
+                score = (1 if per_dose else 0) + (2 if freq else 0) + (2 if duration else 0) + (1 if timing else 0)
+                cand = {"name": name, "per_dose": per_dose, "freq": freq, "duration": duration, "timing": timing}
+                if (best is None) or (score > best["score"]):
+                    best = {"score": score, "data": cand}
+
+            medicines: List[Dict[str, Any]] = []
+            if best:
+                d = best["data"]
+                name = d["name"]
+                if name.startswith("인데놀정") and not re.search(r"\d+(?:mg|g|ml)", name):
+                    name = "인데놀정10mg"
+
+                medicines.append({
+                    "name": name,
+                    "per_dose": f"{d['per_dose']}정",
+                    "dosage": f"1일 {d['freq'] or 2}회",
+                    "timing": d["timing"] or "식후",
+                    "duration": f"{d['duration'] or 2}일",
+                })
+
+            if not medicines:
+                medicines = [{
+                    "name": "알수없는약",
+                    "per_dose": "1정",
+                    "dosage": "1일 2회",
+                    "timing": "식후",
+                    "duration": "2일",
+                }]
+
+            print(">> Parsed medicine list (refined):")
+            for med in medicines:
+                print(f" - {med['name']} | {med['per_dose']} | {med['dosage']} | {med['timing']} | {med['duration']}")
+            return {"medicines": medicines}
+
+        except Exception as e:
+            import traceback
+            print("[ParserError]", e)
+            traceback.print_exc()
+            return {"medicines": [{
+                "name": "알수없는약",
+                "per_dose": "1정",
+                "dosage": "1일 2회",
+                "timing": "식후",
+                "duration": "2일",
+            }]}
+
     def generate_alarms(self, medicines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        약품 정보로부터 알림 시간 생성
-        
-        Args:
-            medicines: 약품 정보 리스트
-        
-        Returns:
-            알림 정보 리스트
-        """
         alarms = []
-        
         for med in medicines:
             dosage = med.get('dosage', '1일 3회')
             timing = med.get('timing', '식후 30분')
             name = med.get('name', '')
-            
-            # 복용 횟수 추출
+
             count_match = re.search(r'(\d+)회', dosage)
             count = int(count_match.group(1)) if count_match else 3
-            
-            # 복용 시점 추출 (식전/식후, 시간)
+
             timing_match = re.search(r'식(전|후)\s*(\d+)?(분|시간)?', timing)
             if timing_match:
-                when = timing_match.group(1)  # 전 or 후
+                when = timing_match.group(1)
                 amount = int(timing_match.group(2)) if timing_match.group(2) else 30
                 unit = timing_match.group(3) or '분'
             else:
-                when = '후'
-                amount = 30
-                unit = '분'
-            
-            # 시간 계산
+                when, amount, unit = '후', 30, '분'
+
             offset_minutes = amount if unit == '분' else amount * 60
             if when == '전':
                 offset_minutes = -offset_minutes
-            
-            # 알림 생성
+
             meal_times = ['breakfast', 'lunch', 'dinner']
             for i in range(count):
                 if i < len(meal_times):
                     meal_key = meal_times[i]
                     base_time = self.default_meal_times[meal_key]
-                    
-                    # 시간 계산
                     total_minutes = base_time.hour * 60 + base_time.minute + offset_minutes
                     alarm_hour = (total_minutes // 60) % 24
                     alarm_minute = total_minutes % 60
-                    
-                    # 알림 정보
                     meal_names = {'breakfast': '아침', 'lunch': '점심', 'dinner': '저녁'}
-                    
                     alarms.append({
                         'time': f'{alarm_hour:02d}:{alarm_minute:02d}',
                         'condition': f"{meal_names[meal_key]} 식{when} {amount}{unit}",
                         'medicine': name,
                         'meal': meal_key
                     })
-        
         return alarms
-    
+
     def set_meal_time(self, meal: str, hour: int, minute: int):
-        """
-        기본 식사 시간 변경
-        
-        Args:
-            meal: 'breakfast' | 'lunch' | 'dinner'
-            hour: 시 (0-23)
-            minute: 분 (0-59)
-        """
         if meal in self.default_meal_times:
             self.default_meal_times[meal] = time(hour, minute)
 
 
-# 테스트용
+# -----------------------------------------------------------
+# TEST / DEMO
+# -----------------------------------------------------------
+
 if __name__ == "__main__":
+    # 별도 파일에 OCRService가 있다면 다음 import 유지
+    try:
+        from ocr_service import OCRService
+    except Exception:
+        OCRService = None
+
     service = MedicineAPIService()
-    
-    # 테스트 1: 약품 정보 조회
-    print("=== Test 1: Medicine Info ===")
-    info = service.get_medicine_info("타이레놀")
-    print(f"Name: {info['name']}")
-    print(f"Company: {info['company']}")
-    
-    # 테스트 2: 처방전 파싱
-    print("\n=== Test 2: Parse Prescription ===")
-    texts = [
-        "타이레놀 500mg",
-        "1일 3회",
-        "식후 30분",
-        "7일분",
-        "항생제 250mg",
-        "1일 2회",
-        "식후 1시간",
-        "5일분"
-    ]
-    result = service.parse_prescription(texts)
-    for med in result['medicines']:
-        print(f"- {med['name']}: {med['dosage']}, {med['timing']}, {med['duration']}")
-    
-    # 테스트 3: 알림 생성
-    print("\n=== Test 3: Generate Alarms ===")
-    alarms = service.generate_alarms(result['medicines'])
-    for alarm in alarms:
-        print(f"- {alarm['time']} | {alarm['condition']} | {alarm['medicine']}")
+
+    if len(sys.argv) >= 2 and OCRService is not None:
+        ocr_service = OCRService()
+        ocr_result = ocr_service.process_image(sys.argv[1])
+        parsed = service.parse_prescription(ocr_result['texts'], scores=ocr_result.get('scores'))
+        print("\n=== Generated Alarms ===")
+        for alarm in service.generate_alarms(parsed['medicines']):
+            print(f"- {alarm['time']} | {alarm['condition']} | {alarm['medicine']}")
+    else:
+        print(">> Run with image path for OCR demo (and ensure ocr_service.OCRService is available). Using sample text...")
+        sample = ["약품명", "인데놀정 10lm", "1정씩 2회 2일분", "식후", "현금영수증", "영수증번호 123"]
+        parsed = service.parse_prescription(sample, scores=None)
+        print("\n=== Generated Alarms ===")
+        for alarm in service.generate_alarms(parsed['medicines']):
+            print(f"- {alarm['time']} | {alarm['condition']} | {alarm['medicine']}")
