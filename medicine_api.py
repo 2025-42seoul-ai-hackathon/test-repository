@@ -18,17 +18,30 @@ from datetime import time
 # -----------------------------------------------------------
 
 _KO_NOISE_KEYWORDS = {
-    "환자정보", "병원정보", "영수증", "현금", "현금영수증", "사업자등록", "사업장소재지", "발행일", "교부번호",
-    "약제비", "본인부담", "보험자부담", "총수납", "주의사항", "복약안내", "약품사진", "약품명", "투약량", "횟수", "일수",
-    "표시대로복용", "아침", "점심", "저녁", "취침전"
+    "환자정보","병원정보","영수증","현금","현금영수증","사업자등록","사업장소재지","발행일","교부번호",
+    "약제비","본인부담","보험자부담","총수납","주의사항","복약안내","약품사진","약품명","투약량","횟수","일수",
+    "표시대로복용","아침","점심","저녁","취침전",
+    "약국","조제약","복약","조제일자","발행기관","총수납금액","현금승인","영수증번호","사업자등록번호"
 }
 
-_MED_NAME_RE = re.compile(r"(?:[가-힣A-Za-z]+)(?:정|캡슐|시럽|액)\d{0,3}(?:mg|g|ml)?")
+_MED_NAME_RE = re.compile(
+    r"(?:[가-힣A-Za-z]+)"
+    r"(?:정|캡슐|시럽|액|점안액)"
+    r"(?:\d+(?:mg|g|ml))?"
+    r"(?:\d+(?:\.\d+)?%)?"
+)
+_BAD_NAME_TOKENS = {"연말정"}
 _PER_DOSE_RE = re.compile(r"(\d+)정씩")
 _FREQ_RE = re.compile(r"(?:1일|하루)(\d+)회|(\d+)번")
 _DURATION_RE = re.compile(r"(\d+)일분?")
 _TIMING_RE = re.compile(r"식(전|후)")
 
+def _looks_like_drug_name(name: str) -> bool:
+    if any(bad in name for bad in _BAD_NAME_TOKENS):
+        return False
+    if "약국" in name:
+        return False
+    return True
 
 def _normalize_ocr(s: str) -> str:
     """OCR 텍스트 정규화(오탈자 보정 포함)"""
@@ -162,86 +175,124 @@ class MedicineAPIService:
                     continue
                 norm.append(t)
 
-            # 2) 약명 후보 수집(±3행 윈도우)
-            candidates = []
+            # 2) ‘투약량횟수일수’ 인덱스와 이후 정수 트리플 추출
+            header_idx = next((i for i, x in enumerate(norm) if "투약량횟수일수" in x), -1)
+            triples: List[tuple[int,int,int]] = []
+            if header_idx != -1:
+                ints: List[int] = []
+                for x in norm[header_idx+1:]:
+                    if re.fullmatch(r"\d{1,3}", x):
+                        ints.append(int(x))
+                # 3개씩 묶기
+                for i in range(0, len(ints) - 2, 3):
+                    triples.append((ints[i], ints[i+1], ints[i+2]))
+
+            # 3) 약명 후보 수집(±3행 윈도우) + 블랙리스트 필터
+            name_windows: List[str] = []
             for i, _t in enumerate(norm):
                 w = _merge_neighbor(norm, i, 3)
                 m = _MED_NAME_RE.search(w)
                 if m:
-                    candidates.append(("name", i, w))
-                elif "인데놀정" in w:
-                    candidates.append(("name", i, w))
+                    name = m.group(0)
+                    if _looks_like_drug_name(name):
+                        name_windows.append(w)
+                elif "점안액" in w or "정" in w:
+                    # 용량/퍼센트가 없더라도 의약품 가능성
+                    if "약국" not in w and "연말정" not in w:
+                        name_windows.append(w)
 
-            # 마지막 수단: “정 + 숫자”가 보이면 후보로
-            if not candidates:
-                for i, t in enumerate(norm):
-                    if "정" in t and re.search(r"\d", t):
-                        candidates.append(("name", i, t))
-                        break
-
-            # 3) 후보 스코어링
-            best = None
-            for _, i, w in candidates:
-                name_match = _MED_NAME_RE.search(w)
-                name = name_match.group(0) if name_match else ("인데놀정" if "인데놀정" in w else None)
-                if not name:
-                    continue
-
-                per_dose = 1
-                m = _PER_DOSE_RE.search(w)
-                if not m:
-                    for line in norm:
-                        m = _PER_DOSE_RE.search(line)
-                        if m: break
+            # 약명 실제 문자열 리스트(표시명만 추출)
+            names: List[str] = []
+            for w in name_windows:
+                m = _MED_NAME_RE.search(w)
                 if m:
-                    per_dose = int(m.group(1))
-
-                freq = None
-                m = _FREQ_RE.search(w)
-                if not m:
-                    for line in norm:
-                        m = _FREQ_RE.search(line)
-                        if m: break
-                if m:
-                    freq = int(m.group(1) or m.group(2))
-
-                duration = None
-                m = _DURATION_RE.search(w)
-                if not m:
-                    for line in norm:
-                        m = _DURATION_RE.search(line)
-                        if m: break
-                if m:
-                    duration = int(m.group(1))
-
-                timing = None
-                m = _TIMING_RE.search(w)
-                if not m:
-                    for line in norm:
-                        m = _TIMING_RE.search(line)
-                        if m: break
-                if m:
-                    timing = f"식{m.group(1)}"
-
-                score = (1 if per_dose else 0) + (2 if freq else 0) + (2 if duration else 0) + (1 if timing else 0)
-                cand = {"name": name, "per_dose": per_dose, "freq": freq, "duration": duration, "timing": timing}
-                if (best is None) or (score > best["score"]):
-                    best = {"score": score, "data": cand}
+                    names.append(m.group(0))
+                elif "점안액" in w and "약국" not in w:
+                    # 이름 대용(점안액 계열)
+                    # 가장 긴 한글+‘점안액’ 토큰 뽑기
+                    m2 = re.search(r"[가-힣A-Za-z]+점안액", w)
+                    if m2:
+                        names.append(m2.group(0))
+            # 중복 제거(순서 유지)
+            seen = set()
+            names = [x for x in names if not (x in seen or seen.add(x))]
 
             medicines: List[Dict[str, Any]] = []
-            if best:
-                d = best["data"]
-                name = d["name"]
-                if name.startswith("인데놀정") and not re.search(r"\d+(?:mg|g|ml)", name):
-                    name = "인데놀정10mg"
 
-                medicines.append({
-                    "name": name,
-                    "per_dose": f"{d['per_dose']}정",
-                    "dosage": f"1일 {d['freq'] or 2}회",
-                    "timing": d["timing"] or "식후",
-                    "duration": f"{d['duration'] or 2}일",
-                })
+            # 4) 정수 트리플과 약명 매핑 우선 시도
+            if names and triples and len(triples) >= len(names):
+                for idx, name in enumerate(names):
+                    per_dose, freq, duration = triples[idx]
+                    display_name = name
+                    if display_name.startswith("인데놀정") and not re.search(r"\d+(?:mg|g|ml|%)", display_name):
+                        display_name = "인데놀정10mg"
+                    medicines.append({
+                        "name": display_name,
+                        "per_dose": f"{per_dose}정" if "정" in display_name else f"{per_dose}회",
+                        "dosage": f"1일 {freq}회",
+                        "timing": "식후",       # 점안액에는 ‘식후’ 개념 없음 → UI에서 시점 라벨 숨김 권장
+                        "duration": f"{duration}일",
+                    })
+            else:
+                # 5) 트리플 매핑 실패 시: 인접 정보 스코어링(기존 방식)
+                best = None
+                for i, w in enumerate(name_windows):
+                    name_m = _MED_NAME_RE.search(w)
+                    name = name_m.group(0) if name_m else None
+                    if not name:
+                        continue
+                    if not _looks_like_drug_name(name):
+                        continue
+
+                    per_dose = 1
+                    m = _PER_DOSE_RE.search(w)
+                    if not m:
+                        for line in norm:
+                            m = _PER_DOSE_RE.search(line)
+                            if m: break
+                    if m:
+                        per_dose = int(m.group(1))
+
+                    freq = None
+                    m = _FREQ_RE.search(w)
+                    if not m:
+                        for line in norm:
+                            m = _FREQ_RE.search(line)
+                            if m: break
+                    if m:
+                        freq = int(m.group(1) or m.group(2))
+
+                    duration = None
+                    m = _DURATION_RE.search(w)
+                    if not m:
+                        for line in norm:
+                            m = _DURATION_RE.search(line)
+                            if m: break
+                    if m:
+                        duration = int(m.group(1))
+
+                    timing = None
+                    m = _TIMING_RE.search(w)
+                    if m:
+                        timing = f"식{m.group(1)}"
+
+                    score = (1 if per_dose else 0) + (2 if freq else 0) + (2 if duration else 0) + (1 if timing else 0)
+                    cand = {"name": name, "per_dose": per_dose, "freq": freq, "duration": duration, "timing": timing}
+                    if (best is None) or (score > best["score"]):
+                        best = {"score": score, "data": cand}
+
+                if best:
+                    d = best["data"]
+                    name = d["name"]
+                    if name.startswith("인데놀정") and not re.search(r"\d+(?:mg|g|ml|%)", name):
+                        name = "인데놀정10mg"
+                    medicines.append({
+                        "name": name,
+                        "per_dose": f"{d['per_dose']}정",
+                        "dosage": f"1일 {d['freq'] or 2}회",
+                        "timing": d["timing"] or "식후",
+                        "duration": f"{d['duration'] or 2}일",
+                    })
 
             if not medicines:
                 medicines = [{
@@ -268,6 +319,7 @@ class MedicineAPIService:
                 "timing": "식후",
                 "duration": "2일",
             }]}
+
 
     def generate_alarms(self, medicines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         alarms = []
