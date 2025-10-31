@@ -4,6 +4,46 @@
   box-sizing: border-box;
 }
 
+/* 레이아웃 */
+.app { display:flex; flex-direction:column; height:100vh; }
+.header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #e5e7eb; }
+.logo { display:flex; align-items:center; gap:8px; }
+.logo-icon { font-size:20px; }
+.app-name { font-weight:600; font-size:16px; }
+.main-content { padding:16px; }
+
+/* 카드 */
+.card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+.card.wide { width:100%; }
+
+/* 섹션 타이틀 */
+.section-title { font-weight:700; font-size:18px; margin:8px 0 12px; }
+.section-subtitle { font-weight:600; font-size:14px; color:#4b5563; margin:8px 0; }
+
+/* 폼 */
+.form-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:10px 0; }
+.form-row label { width:90px; color:#374151; font-weight:500; }
+.form-row input[type="date"],
+.form-row input[type="time"],
+.form-row select,
+.form-row input[type="text"] {
+  flex:1; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; font-size:14px;
+}
+
+/* 바텀 네비 */
+.bottom-nav {
+  position:fixed; bottom:0; left:0; right:0;
+  display:flex; justify-content:space-around; align-items:center;
+  padding:8px 0; background:#fff; border-top:1px solid #e5e7eb;
+}
+.nav-item { flex:1; text-align:center; padding:6px 0; cursor:pointer; user-select:none; }
+.nav-item.active .nav-label { color:#111827; font-weight:700; }
+.nav-icon { font-size:18px; line-height:1; }
+.nav-label { font-size:12px; color:#6b7280; margin-top:2px; }
+
+/* 리스트/알람 등 기존 클래스가 있으면 그대로 유지 */
+
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background: #F8F9FA;
