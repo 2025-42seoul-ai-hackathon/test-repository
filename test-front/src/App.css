@@ -333,7 +333,7 @@ body {
   font-weight: 500;
 }
 
-/* 알림 설정 화면 */
+/* 알람 설정 화면 */
 .alarm-info {
   background: #E8F5E9;
   border-radius: 12px;
@@ -400,7 +400,7 @@ body {
   cursor: pointer;
 }
 
-/* 알림 목록 화면 */
+/* 알람 목록 화면 */
 .medicine-list-item {
   background: white;
   border-radius: 16px;

@@ -16,7 +16,7 @@ const ListScreen = ({ savedMedicines }) => {
             <div style={{ fontSize: '64px', marginBottom: '16px', opacity: 0.3 }}>
               📭
             </div>
-            <div style={{ fontSize: '16px' }}>등록된 알림이 없습니다</div>
+            <div style={{ fontSize: '16px' }}>등록된 알람이 없습니다</div>
           </div>
         ) : (
           savedMedicines.map((item, index) => (
@@ -29,7 +29,7 @@ const ListScreen = ({ savedMedicines }) => {
                 <div className="status-badge status-active">진행중</div>
               </div>
               <div className="next-alarm">
-                🔔 다음 알림: {item.nextAlarm || '예정 없음'}
+                🔔 다음 알람: {item.nextAlarm || '예정 없음'}
               </div>
               <div className="progress-info">
                 {item.progress || '0/0회 복용 완료'} · {item.medicine.duration}

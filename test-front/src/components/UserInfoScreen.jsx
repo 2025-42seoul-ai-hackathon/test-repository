@@ -27,7 +27,7 @@ export default function UserInfoScreen({ value, onChange }) {
 
   return (
     <div className="main-content">
-      <div className="section-title">유저 정보</div>
+      <div className="section-title">내 정보</div>
 
       <div className="card wide">
         <div className="form-row">

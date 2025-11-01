@@ -122,7 +122,7 @@ function App() {
       <div className="header">
         <div className="logo">
           <div className="logo-icon">💊</div>
-          <div className="app-name">{screen === 'list' ? '복약 알림' : screen === 'user' ? '유저 정보' : '알약 도우미'}</div>
+          <div className="app-name">{screen === 'list' ? '복약 알람' : screen === 'user' ? '내 정보' : '알약 도우미'}</div>
         </div>
         {/* 설정 아이콘 제거 */}
       </div>

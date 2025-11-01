@@ -1,7 +1,7 @@
 import React from 'react';
 
 const AlarmScreen = ({ medicines, alarms, onSave, onBack }) => {
-  // 약품별로 알림 그룹화
+  // 약품별로 알람 그룹화
   const groupedAlarms = medicines.reduce((acc, med) => {
     acc[med.name] = alarms.filter(alarm => alarm.medicine === med.name);
     return acc;
@@ -11,13 +11,13 @@ const AlarmScreen = ({ medicines, alarms, onSave, onBack }) => {
     <>
       <div className="result-header">
         <button className="back-button" onClick={onBack}>←</button>
-        <div className="header-title">알림 설정</div>
+        <div className="header-title">알람 설정</div>
       </div>
 
       <div className="result-content">
         <div className="alarm-info">
           <div className="alarm-info-text">
-            💡 기본 식사 시간으로 알림이 설정되었어요.<br />
+            💡 기본 식사 시간으로 알람이 설정되었어요.<br />
             시간을 변경하고 싶으면 수정 버튼을 눌러주세요.
           </div>
         </div>
@@ -44,7 +44,7 @@ const AlarmScreen = ({ medicines, alarms, onSave, onBack }) => {
       </div>
 
       <button className="save-button" onClick={onSave}>
-        ✓ 알림 저장하기
+        ✓ 알람 저장하기
       </button>
     </>
   );

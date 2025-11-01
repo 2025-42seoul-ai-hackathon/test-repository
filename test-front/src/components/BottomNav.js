@@ -9,11 +9,11 @@ export default function BottomNav({ activeTab, onTabChange }) {
       </div>
       <div className={`nav-item ${activeTab === 'list' ? 'active' : ''}`} onClick={() => onTabChange('list')}>
         <div className="nav-icon">⏰</div>
-        <div className="nav-label">알림</div>
+        <div className="nav-label">알람</div>
       </div>
       <div className={`nav-item ${activeTab === 'user' ? 'active' : ''}`} onClick={() => onTabChange('user')}>
         <div className="nav-icon">👤</div>
-        <div className="nav-label">유저 정보</div>
+        <div className="nav-label">내 정보</div>
       </div>
     </div>
   );

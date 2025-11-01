@@ -21,10 +21,10 @@ const MainScreen = ({ onCapture }) => {
           <div className="pulse"></div>
           <div className="camera-icon">📷</div>
         </div>
-        <div className="main-text">약 봉투를 촬영해주세요</div>
+        <div className="main-text">약 이름을 촬영해주세요</div>
         <div className="sub-text">
-          처방전 봉투를 찍으면<br />
-          자동으로 복약 알림을 설정해드려요
+          처방전 봉투 또는 약 상자를 찍으면<br />
+          자동으로 복약 알람을 설정해드려요
         </div>
         <input
           ref={fileInputRef}

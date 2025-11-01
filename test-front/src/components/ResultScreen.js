@@ -105,7 +105,7 @@ const ResultScreen = ({ medicines, onConfirm, onBack }) => {
       </div>
 
       <button className="confirm-button" onClick={onConfirm}>
-        알림 설정하기
+        알람 설정하기
       </button>
     </>
   );

@@ -119,7 +119,7 @@ Content-Type: application/json
 }
 ```
 
-### 4. 처방전 파싱 + 알림 생성
+### 4. 처방전 파싱 + 알람 생성
 ```bash
 POST /api/medicine/parse
 Content-Type: application/json
@@ -231,6 +231,6 @@ pip install flask-cors
 ## 다음 단계
 
 1. React 프론트엔드 연동
-2. 알림 저장/관리 기능 추가
+2. 알람 저장/관리 기능 추가
 3. 보호자 연동 기능 구현
 4. 사용자 인증 추가
