@@ -51,7 +51,7 @@ def ocr_endpoint():
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
-
+        print('test')
         result = ocr_service.process_image(filepath)
 
         if os.path.exists(filepath):
